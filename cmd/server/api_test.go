@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 )
@@ -33,12 +34,23 @@ func TestNewMux(t *testing.T) {
 }
 
 func TestIngestEndpoint(t *testing.T) {
-	// Reset logs before tests to ensure isolation
-	mu.Lock()
-	logs = []LogEntry{}
-	mu.Unlock()
-
 	t.Run("ingest valid log with POST request", func(t *testing.T) {
+		tempfile, err := os.CreateTemp("", "test_logs_*.txt")
+		if err != nil {
+			t.Fatalf("failed to create temp file: %v", err)
+		}
+		defer os.Remove(tempfile.Name())
+
+		originalFile := file
+		OriginalLogs := logs
+		defer func() {
+			file = originalFile
+			logs = OriginalLogs
+		}()
+
+		file = tempfile
+		logs = []LogEntry{}
+
 		payload := map[string]string{
 			"level":   "info",
 			"message": "test log message",
@@ -60,6 +72,11 @@ func TestIngestEndpoint(t *testing.T) {
 		if response.Body.String() != "ok" {
 			t.Errorf("expected body 'ok', got '%s'", response.Body.String())
 		}
+
+		file.Seek(0, 0)
+		logs = []LogEntry{}
+		// Load logs from disk to verify persistence
+		loadFromDisk()
 
 		// Verify log was stored
 		mu.Lock()
@@ -165,4 +182,48 @@ func TestSearchEndpoint(t *testing.T) {
 			t.Errorf("expected status 405 Method Not Allowed, got %d", response.Code)
 		}
 	})
+}
+
+func TestLoadFromDisk(t *testing.T) {
+	// Create a temporary file with sample log entries
+	tempFile, err := os.CreateTemp("", "logs_*.txt")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+
+	sampleLogs := []LogEntry{
+		{Timestamp: time.Now(), Level: "info", Message: "log from disk 1"},
+		{Timestamp: time.Now(), Level: "error", Message: "log from disk 2"},
+	}
+
+	for _, logEntry := range sampleLogs {
+		data, _ := json.Marshal(logEntry)
+		tempFile.Write(append(data, '\n'))
+	}
+	tempFile.Close()
+
+	// Open the temp file for reading
+	file, err = os.OpenFile(tempFile.Name(), os.O_RDWR, 0644)
+	if err != nil {
+		t.Fatalf("failed to open temp file: %v", err)
+	}
+	defer file.Close()
+
+	// Load logs from disk
+	loadFromDisk()
+
+	// Verify logs were loaded correctly
+	mu.Lock()
+	if len(logs) != len(sampleLogs) {
+		t.Errorf("expected %d log entries, got %d", len(sampleLogs), len(logs))
+	} else {
+		for i, logEntry := range sampleLogs {
+			if logs[i].Level != logEntry.Level || logs[i].Message != logEntry.Message {
+				t.Errorf("log entry mismatch at index %d: expected level=%s, message=%s; got level=%s, message=%s",
+					i, logEntry.Level, logEntry.Message, logs[i].Level, logs[i].Message)
+			}
+		}
+	}
+	mu.Unlock()
 }
