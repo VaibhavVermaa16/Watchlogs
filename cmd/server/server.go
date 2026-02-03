@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Project/Watchlogs/cmd/helper"
 	"bufio"
 	"encoding/json"
 	"net/http"
@@ -18,8 +19,9 @@ type LogEntry struct {
 var (
 	mu sync.Mutex // if we just want to make sure only one goroutine can access a variable at a time to avoid conflicts
 	// It provides two methods: Lock and Unlock
-	logs []LogEntry // Storing the recieved logs in memory for simplicity
-	file *os.File   // File handle for log storage even after server restarts
+	logs  []LogEntry // Storing the recieved logs in memory for simplicity
+	file  *os.File   // File handle for log storage even after server restarts
+	index = make(map[string][]int) // Inverted index for token to log entry IDs
 )
 
 func loadFromDisk() {
@@ -30,7 +32,11 @@ func loadFromDisk() {
 		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
 			continue
 		}
+		id := len(logs)
 		logs = append(logs, entry)
+		for _, token := range helper.Tokenize(entry.Message) {
+			index[token] = append(index[token], id)
+		}
 	}
 }
 
@@ -61,7 +67,11 @@ func ingest(w http.ResponseWriter, r *http.Request) {
 
 	// Storing the log entry in memory (thread-safe)
 	mu.Lock()
+	id := len(logs)
 	logs = append(logs, entry)
+	for _, token := range helper.Tokenize(entry.Message) {
+		index[token] = append(index[token], id)
+	}
 	file.Write(append(data, '\n'))
 	file.Sync()
 	mu.Unlock()
@@ -74,7 +84,25 @@ func search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Retrieving logs (thread-safe)
+	q := r.URL.Query().Get("q")
+	if q != "" {
+		// If a query is provided, filter logs based on the query
+		mu.Lock()
+		var filtered []LogEntry
+		ids := index[q]
+		for _, id := range ids {
+			filtered = append(filtered, logs[id])
+		}
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(filtered); err != nil {
+			http.Error(w, "failed to encode logs", http.StatusInternalServerError)
+			return
+		}
+		return
+	}
+
+	// Retrieving all logs (thread-safe)
 	mu.Lock()
 	defer mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
