@@ -61,8 +61,10 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 
 	var results []app.LogEntry
 	if q != "" {
-		for _, id := range s.App.Index[q] {
-			results = append(results, s.App.Logs[id])
+		maxResults := 5
+		ids := s.App.Index[q]
+		for i := len(ids) -1; i>=0 && len(results) < maxResults; i-- {
+			results = append(results, s.App.Logs[ids[i]])
 		}
 	} else {
 		results = s.App.Logs

@@ -5,6 +5,8 @@ import (
 	"watchlogs/cmd/internal/app"
 )
 
+const maxPerToken = 1000
+
 func Writer(logCh <-chan app.LogEntry, a *app.App) {
 	// Example worker function that could perform background tasks
 	for entry := range logCh {
@@ -14,8 +16,12 @@ func Writer(logCh <-chan app.LogEntry, a *app.App) {
 		id := len(a.Logs)
 		a.Logs = append(a.Logs, entry)
 
-		for _, t := range Tokenize(entry.Message) {
-			a.Index[t] = append(a.Index[t], id)
+		for _, token := range Tokenize(entry.Message) {
+			ids := a.Index[token]
+			if len(ids) >= maxPerToken {
+				ids = ids[1:] // Remove oldest ID to maintain size
+			}
+			a.Index[token] = append(ids, id)
 		}
 
 		a.File.Write(append(data, '\n'))
