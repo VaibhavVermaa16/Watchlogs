@@ -4,6 +4,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"watchlogs/cmd/helper"
 	"watchlogs/cmd/internal/app"
@@ -25,6 +27,20 @@ func main() {
 	srv := server.New(a)
 	srv.LoadFromDisk()
 	go helper.Writer(a.LogCh, a)
+
+	// Graceful shutdown
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-stop // Wait for shutdown signal, program pause here until signal is received
+		log.Println("shutting down server...")
+		close(a.LogCh) // Close the log channel to stop the writer goroutine
+		file.Sync() // Ensure all data is flushed to disk
+		file.Close()
+		os.Exit(0)
+	}()
+
 
 	log.Println("server running on :8080")
 	log.Fatal(http.ListenAndServe(":8080", srv.Router()))
