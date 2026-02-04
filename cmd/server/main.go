@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 
+	"watchlogs/cmd/helper"
 	"watchlogs/cmd/internal/app"
 	"watchlogs/cmd/internal/server"
 )
@@ -18,10 +19,12 @@ func main() {
 	a := &app.App{
 		File:  file,
 		Index: make(map[string][]int),
+		LogCh: make(chan app.LogEntry, 1000),
 	}
 
 	srv := server.New(a)
 	srv.LoadFromDisk()
+	go helper.Writer(a.LogCh, a)
 
 	log.Println("server running on :8080")
 	log.Fatal(http.ListenAndServe(":8080", srv.Router()))

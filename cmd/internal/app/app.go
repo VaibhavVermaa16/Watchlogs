@@ -18,4 +18,5 @@ type App struct {
 	Logs  []LogEntry
 	Index map[string][]int
 	Mu    sync.Mutex
+	LogCh chan LogEntry
 }

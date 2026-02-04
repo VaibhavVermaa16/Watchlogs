@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"watchlogs/cmd/helper"
 	"watchlogs/cmd/internal/app"
 )
 
@@ -31,19 +30,20 @@ func (s *Server) Ingest(w http.ResponseWriter, r *http.Request) {
 		Message:   req.Message,
 	}
 
-	data, _ := json.Marshal(entry)
+	// data, _ := json.Marshal(entry)
 
-	s.App.Mu.Lock()
-	id := len(s.App.Logs)
-	s.App.Logs = append(s.App.Logs, entry)
+	// s.App.Mu.Lock()
+	// id := len(s.App.Logs)
+	// s.App.Logs = append(s.App.Logs, entry)
 
-	for _, token := range helper.Tokenize(entry.Message) {
-		s.App.Index[token] = append(s.App.Index[token], id)
-	}
+	// for _, token := range helper.Tokenize(entry.Message) {
+	// 	s.App.Index[token] = append(s.App.Index[token], id)
+	// }
 
-	s.App.File.Write(append(data, '\n'))
-	s.App.File.Sync()
-	s.App.Mu.Unlock()
+	// s.App.File.Write(append(data, '\n'))
+	// s.App.File.Sync()
+	// s.App.Mu.Unlock()
+	s.App.LogCh <- entry
 
 	w.Write([]byte("ok"))
 }
