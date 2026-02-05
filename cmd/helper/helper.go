@@ -51,7 +51,7 @@ func Intersect(a, b []int) []int {
 
 func ParseSince(since string) time.Time {
 	if since == "" {
-		return time.Now()
+		return time.Time{}
 	}
 
 	duration, err := time.ParseDuration(since)

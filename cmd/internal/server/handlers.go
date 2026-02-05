@@ -2,7 +2,9 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"watchlogs/cmd/helper"
@@ -14,6 +16,8 @@ func (s *Server) Ingest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+
+	atomic.AddInt64(&s.App.Metrics.TotalIngested, 1)
 
 	var req struct {
 		Level   string `json:"level"`
@@ -55,6 +59,8 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	atomic.AddInt64(&s.App.Metrics.TotalSearched, 1)
+
 	q := r.URL.Query().Get("q")
 
 	tokens := helper.Tokenize(q)
@@ -88,8 +94,7 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	since := r.URL.Query().Get("since")
-	sinceTime := helper.ParseSince(since)
+	sinceTime := helper.ParseSince(r.URL.Query().Get("since"))
 
 	for i := len(ids) - 1; i >= 0; i-- {
 		e := s.App.Logs[ids[i]]
@@ -102,4 +107,29 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 	// Return results as JSON
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
+}
+
+func (s *Server) Metrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	uptime := time.Since(s.App.Metrics.StartTime).Seconds()
+	s.App.Mu.Lock()
+	var logCount = len(s.App.Logs)
+	var tokenCount = 0
+	for _, ids := range s.App.Index {
+		tokenCount += len(ids)
+	}
+	s.App.Mu.Unlock()
+
+	fmt.Fprintf(w,
+
+		"uptime_sec %.0f\nlogs %d\ntokens %d\ningested %d\nsearched %d\n",
+		uptime,
+		logCount,
+		tokenCount,
+		atomic.LoadInt64(&s.App.Metrics.TotalIngested),
+		atomic.LoadInt64(&s.App.Metrics.TotalSearched))
 }

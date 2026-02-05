@@ -13,9 +13,16 @@ type LogEntry struct {
 }
 
 type App struct {
-	File  *os.File
-	Logs  []LogEntry
-	Index map[string][]int
-	Mu    sync.Mutex
-	LogCh chan LogEntry
+	File    *os.File
+	Logs    []LogEntry
+	Index   map[string][]int
+	Mu      sync.Mutex
+	LogCh   chan LogEntry
+	Metrics Metrics
+}
+
+type Metrics struct {
+	TotalIngested int64     `json:"totalIngested"`
+	TotalSearched int64     `json:"totalSearched"`
+	StartTime     time.Time `json:"startTime"`
 }

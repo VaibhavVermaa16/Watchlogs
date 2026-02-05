@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"watchlogs/cmd/helper"
 	"watchlogs/cmd/internal/app"
@@ -23,6 +24,7 @@ func main() {
 		Index: make(map[string][]int),
 		LogCh: make(chan app.LogEntry, 1000),
 	}
+	a.Metrics.StartTime = time.Now()
 
 	srv := server.New(a)
 	srv.LoadFromDisk()
