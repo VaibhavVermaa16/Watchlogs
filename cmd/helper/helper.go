@@ -1,11 +1,16 @@
 package helper
 
+import "time"
+
 func Tokenize(input string) []string {
 	var tokens []string
 	current := ""
 
 	for _, char := range input {
-		if char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' {
+		if char >= 'A' && char <= 'Z' {
+			char += 'a' - 'A' // Convert to lowercase
+		}
+		if char >= 'a' && char <= 'z' {
 			current += string(char)
 		} else {
 			if current != "" {
@@ -37,4 +42,17 @@ func Intersect(a, b []int) []int {
 		}
 	}
 	return result
+}
+
+func ParseSince(since string) time.Time {
+	if since == "" {
+		return time.Now()
+	}
+
+	duration, err := time.ParseDuration(since)
+	if err != nil {
+		return time.Now()
+	}
+	
+	return time.Now().Add(-duration)
 }

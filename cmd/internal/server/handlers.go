@@ -66,7 +66,7 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 
 	s.App.Mu.Lock()
 	defer s.App.Mu.Unlock()
-	
+
 	var results []app.LogEntry
 	// if q != "" {
 	// 	maxResults := 5
@@ -88,8 +88,15 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	since := r.URL.Query().Get("since")
+	sinceTime := helper.ParseSince(since)
+
 	for i := len(ids) - 1; i >= 0; i-- {
-		results = append(results, s.App.Logs[ids[i]])
+		e := s.App.Logs[ids[i]]
+		if !sinceTime.IsZero() && e.Timestamp.Before(sinceTime) {
+			continue
+		}
+		results = append(results, e)
 	}
 
 	// Return results as JSON
