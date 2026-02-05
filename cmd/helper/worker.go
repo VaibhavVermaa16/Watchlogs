@@ -10,7 +10,7 @@ const maxPerToken = 1000
 func Writer(logCh <-chan app.LogEntry, a *app.App) {
 	// Example worker function that could perform background tasks
 	for entry := range logCh {
-		data, _  := json.Marshal(entry)
+		data, _ := json.Marshal(entry)
 		a.Mu.Lock()
 
 		id := len(a.Logs)

@@ -12,7 +12,6 @@ type LogEntry struct {
 	Message   string    `json:"message"`
 }
 
-
 type App struct {
 	File  *os.File
 	Logs  []LogEntry

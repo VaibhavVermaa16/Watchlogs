@@ -1,9 +1,9 @@
 package server
 
 import (
-	"slices"
 	"encoding/json"
 	"os"
+	"slices"
 	"testing"
 	"watchlogs/cmd/helper"
 	"watchlogs/cmd/internal/app"
@@ -17,7 +17,7 @@ func TestServer(t *testing.T) {
 	defer os.Remove(tempfile.Name())
 	defer tempfile.Close()
 	a := &app.App{
-		File: tempfile,
+		File:  tempfile,
 		Index: make(map[string][]int),
 	}
 	srv := New(a)
@@ -59,7 +59,7 @@ func TestServer(t *testing.T) {
 				i, logEntry.Level, logEntry.Message, srv.App.Logs[i].Level, srv.App.Logs[i].Message)
 		}
 	}
-	
+
 	// Check if index is built correctly
 	for i, logEntry := range payload {
 		tokens := helper.Tokenize(logEntry.Message)

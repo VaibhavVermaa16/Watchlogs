@@ -36,11 +36,13 @@ func main() {
 		<-stop // Wait for shutdown signal, program pause here until signal is received
 		log.Println("shutting down server...")
 		close(a.LogCh) // Close the log channel to stop the writer goroutine
-		file.Sync() // Ensure all data is flushed to disk
+		file.Sync()    // Ensure all data is flushed to disk
 		file.Close()
 		os.Exit(0)
 	}()
 
+	// Log rotation to remove unwanted old logs
+	go helper.Cleanup(a)
 
 	log.Println("server running on :8080")
 	log.Fatal(http.ListenAndServe(":8080", srv.Router()))
