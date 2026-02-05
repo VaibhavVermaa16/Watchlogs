@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"watchlogs/cmd/helper"
 	"watchlogs/cmd/internal/app"
 )
 
@@ -56,20 +57,42 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 
 	q := r.URL.Query().Get("q")
 
-	s.App.Mu.Lock()
-	defer s.App.Mu.Unlock()
-
-	var results []app.LogEntry
-	if q != "" {
-		maxResults := 5
-		ids := s.App.Index[q]
-		for i := len(ids) -1; i>=0 && len(results) < maxResults; i-- {
-			results = append(results, s.App.Logs[ids[i]])
-		}
-	} else {
-		results = s.App.Logs
+	tokens := helper.Tokenize(q)
+	if len(tokens) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(s.App.Logs)
+		return
 	}
 
+	s.App.Mu.Lock()
+	defer s.App.Mu.Unlock()
+	
+	var results []app.LogEntry
+	// if q != "" {
+	// 	maxResults := 5
+	// 	ids := s.App.Index[q]
+	// 	for i := len(ids) - 1; i >= 0 && len(results) < maxResults; i-- {
+	// 		results = append(results, s.App.Logs[ids[i]])
+	// 	}
+	// } else {
+	// 	results = s.App.Logs
+	// }
+
+	var ids []int
+
+	for i := range tokens {
+		if len(ids) == 0 {
+			ids = s.App.Index[tokens[i]]
+		} else {
+			ids = helper.Intersect(ids, s.App.Index[tokens[i]])
+		}
+	}
+
+	for i := len(ids) - 1; i >= 0; i-- {
+		results = append(results, s.App.Logs[ids[i]])
+	}
+
+	// Return results as JSON
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
 }
