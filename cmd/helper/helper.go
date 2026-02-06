@@ -5,7 +5,7 @@ import (
 	"watchlogs/cmd/internal/app"
 )
 
-const retentionPeriod = 24 * time.Hour
+const RetentionPeriod = 24 * time.Hour
 
 func Tokenize(input string) []string {
 	var tokens []string
@@ -66,7 +66,7 @@ func Cleanup(a *app.App) {
 	ticker := time.NewTicker(10 * time.Minute)
 
 	for range ticker.C {
-		cutoff := time.Now().Add(-retentionPeriod)
+		cutoff := time.Now().Add(-RetentionPeriod)
 
 		// Perform cleanup logic here, e.g., remove old log entries from memory and disk
 

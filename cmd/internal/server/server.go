@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"encoding/json"
+	"time"
 
 	"watchlogs/cmd/helper"
 	"watchlogs/cmd/internal/app"
@@ -25,12 +26,14 @@ func (s *Server) LoadFromDisk() {
 		if json.Unmarshal(scanner.Bytes(), &entry) != nil {
 			continue
 		}
+		cutoff := time.Now().Add(-helper.RetentionPeriod)
+		if entry.Timestamp.After(cutoff) {
+			id := len(s.App.Logs)
+			s.App.Logs = append(s.App.Logs, entry)
 
-		id := len(s.App.Logs)
-		s.App.Logs = append(s.App.Logs, entry)
-
-		for _, token := range helper.Tokenize(entry.Message) {
-			s.App.Index[token] = append(s.App.Index[token], id)
+			for _, token := range helper.Tokenize(entry.Message) {
+				s.App.Index[token] = append(s.App.Index[token], id)
+			}
 		}
 	}
 }
