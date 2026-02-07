@@ -26,7 +26,7 @@ func (s *Server) LoadFromDisk() {
 		if json.Unmarshal(scanner.Bytes(), &entry) != nil {
 			continue
 		}
-		cutoff := time.Now().Add(-helper.RetentionPeriod)
+		cutoff := time.Now().Add(-s.App.Cfg.Retention)
 		if entry.Timestamp.After(cutoff) {
 			id := len(s.App.Logs)
 			s.App.Logs = append(s.App.Logs, entry)

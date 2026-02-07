@@ -1,11 +1,54 @@
 package helper
 
 import (
+	"os"
+	"strconv"
 	"time"
 	"watchlogs/cmd/internal/app"
 )
 
-const RetentionPeriod = 24 * time.Hour
+func LoadConfig() app.Config {
+	ret := 24 * time.Hour
+	if v := os.Getenv("RETENTION"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			ret = d
+		}
+	}
+
+	maxRes := 100
+	if v := os.Getenv("MAX_RESULTS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			maxRes = n
+		}
+	}
+
+	chSize := 1000
+	if v := os.Getenv("CHANNEL_SIZE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			chSize = n
+		}
+	}
+
+	path := "cmd/data/logs.txt"
+	if v := os.Getenv("DATA_PATH"); v != "" {
+		path = v
+	}
+
+	maxPerToken := 1000
+	if v := os.Getenv("MAX_PER_TOKEN"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			maxPerToken = n
+		}
+	}
+
+	return app.Config{
+		Retention:   ret,
+		MaxResults:  maxRes,
+		ChannelSize: chSize,
+		MaxPerToken: maxPerToken,
+		DataPath:    path,
+	}
+}
 
 func Tokenize(input string) []string {
 	var tokens []string
@@ -66,7 +109,7 @@ func Cleanup(a *app.App) {
 	ticker := time.NewTicker(10 * time.Minute)
 
 	for range ticker.C {
-		cutoff := time.Now().Add(-RetentionPeriod)
+		cutoff := time.Now().Add(-a.Cfg.Retention)
 
 		// Perform cleanup logic here, e.g., remove old log entries from memory and disk
 

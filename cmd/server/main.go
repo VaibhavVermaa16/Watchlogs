@@ -14,7 +14,8 @@ import (
 )
 
 func main() {
-	file, err := os.OpenFile("cmd/data/logs.txt", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+	cfg := helper.LoadConfig()
+	file, err := os.OpenFile(cfg.DataPath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -22,7 +23,8 @@ func main() {
 	a := &app.App{
 		File:  file,
 		Index: make(map[string][]int),
-		LogCh: make(chan app.LogEntry, 1000),
+		LogCh: make(chan app.LogEntry, cfg.ChannelSize),
+		Cfg:   cfg,
 	}
 	a.Metrics.StartTime = time.Now()
 

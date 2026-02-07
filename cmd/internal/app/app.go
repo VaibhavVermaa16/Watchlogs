@@ -19,10 +19,19 @@ type App struct {
 	Mu      sync.Mutex
 	LogCh   chan LogEntry
 	Metrics Metrics
+	Cfg     Config
 }
 
 type Metrics struct {
 	TotalIngested int64     `json:"totalIngested"`
 	TotalSearched int64     `json:"totalSearched"`
 	StartTime     time.Time `json:"startTime"`
+}
+
+type Config struct {
+	Retention   time.Duration
+	MaxResults  int
+	ChannelSize int
+	DataPath    string
+	MaxPerToken int
 }
