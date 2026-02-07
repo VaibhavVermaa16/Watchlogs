@@ -55,7 +55,7 @@ func TestIngest(t *testing.T) {
 			t.Fatalf("expected status 202 Accepted, got %d", res.Code)
 		}
 
-		if string(res.Body.Bytes()) != "ok" {
+		if res.Body.String() != "ok" {
 			t.Errorf("expected response body 'ok', got '%s'", res.Body.String())
 		}
 	})
