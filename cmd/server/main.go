@@ -5,12 +5,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"watchlogs/cmd/helper"
 	"watchlogs/cmd/internal/app"
 	"watchlogs/cmd/internal/server"
+
 	"github.com/joho/godotenv"
 )
 
@@ -34,6 +36,7 @@ func main() {
 		Cfg:   cfg,
 	}
 	a.Metrics.StartTime = time.Now()
+	atomic.StoreInt64(&a.Metrics.Ready, 1)
 
 	srv := server.New(a)
 	srv.LoadFromDisk()
@@ -46,6 +49,7 @@ func main() {
 	go func() {
 		<-stop // Wait for shutdown signal, program pause here until signal is received
 		log.Println("shutting down server...")
+		atomic.StoreInt64(&a.Metrics.Ready, 0)
 		close(a.LogCh) // Close the log channel to stop the writer goroutine
 		file.Sync()    // Ensure all data is flushed to disk
 		file.Close()

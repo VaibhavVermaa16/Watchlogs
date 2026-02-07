@@ -13,6 +13,12 @@ import (
 )
 
 func (s *Server) Ingest(w http.ResponseWriter, r *http.Request) {
+	if atomic.LoadInt64(&s.App.Metrics.Ready) == 0 {
+		log.Printf("Received ingest request from %s but server is not ready\n", r.RemoteAddr)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("server is not ready, try again later"))
+		return
+	}
 	if r.Method != http.MethodPost {
 		log.Printf("Received non-POST request on /ingest: %s\n", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -52,6 +58,12 @@ func (s *Server) Ingest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
+	if atomic.LoadInt64(&s.App.Metrics.Ready) == 0 {
+		log.Printf("Received search request from %s but server is not ready\n", r.RemoteAddr)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("server is not ready, try again later"))
+		return
+	}
 	if r.Method != http.MethodGet {
 		log.Printf("Received non-GET request on /search: %s\n", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -133,4 +145,35 @@ func (s *Server) Metrics(w http.ResponseWriter, r *http.Request) {
 		tokenCount,
 		atomic.LoadInt64(&s.App.Metrics.TotalIngested),
 		atomic.LoadInt64(&s.App.Metrics.TotalSearched))
+}
+
+func (s *Server) Health(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		log.Printf("Received non-GET request on /health: %s\n", r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	log.Printf("Received health check request from %s\n", r.RemoteAddr)
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
+}
+
+func (s *Server) Ready(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		log.Printf("Received non-GET request on /ready: %s\n", r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if atomic.LoadInt64(&s.App.Metrics.Ready) == 1 {
+		log.Printf("Received ready check request from %s - READY\n", r.RemoteAddr)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+		return
+	}
+
+	log.Printf("Received ready check request from %s - NOT READY\n", r.RemoteAddr)
+	w.WriteHeader(http.StatusServiceUnavailable)
+	w.Write([]byte("not ready"))
 }

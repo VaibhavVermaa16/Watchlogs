@@ -23,6 +23,7 @@ type App struct {
 }
 
 type Metrics struct {
+	Ready         int64     `json:"ready"`
 	TotalIngested int64     `json:"totalIngested"`
 	TotalSearched int64     `json:"totalSearched"`
 	StartTime     time.Time `json:"startTime"`
