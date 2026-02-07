@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -94,11 +95,13 @@ func Intersect(a, b []int) []int {
 
 func ParseSince(since string) time.Time {
 	if since == "" {
+		log.Println("No 'since' parameter provided, returning zero time")
 		return time.Time{}
 	}
 
 	duration, err := time.ParseDuration(since)
 	if err != nil {
+		log.Printf("Invalid 'since' parameter: %s, error: %v\n", since, err)
 		return time.Now()
 	}
 
@@ -107,8 +110,9 @@ func ParseSince(since string) time.Time {
 
 func Cleanup(a *app.App) {
 	ticker := time.NewTicker(10 * time.Minute)
-
+	
 	for range ticker.C {
+		log.Println("Starting cleanup goroutine...")
 		cutoff := time.Now().Add(-a.Cfg.Retention)
 
 		// Perform cleanup logic here, e.g., remove old log entries from memory and disk
@@ -132,4 +136,5 @@ func Cleanup(a *app.App) {
 		a.Logs = newLogs
 		a.Mu.Unlock()
 	}
+	log.Println("Cleanup goroutine stopped.")
 }

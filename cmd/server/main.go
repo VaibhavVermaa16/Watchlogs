@@ -11,10 +11,17 @@ import (
 	"watchlogs/cmd/helper"
 	"watchlogs/cmd/internal/app"
 	"watchlogs/cmd/internal/server"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	log.Println("Server started...")
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 	cfg := helper.LoadConfig()
+	log.Printf("Config: %+v\n", cfg)
 	file, err := os.OpenFile(cfg.DataPath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		log.Fatal(err)

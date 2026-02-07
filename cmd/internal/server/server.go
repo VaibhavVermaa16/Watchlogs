@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"encoding/json"
+	"log"
 	"time"
 
 	"watchlogs/cmd/helper"
@@ -18,6 +19,7 @@ func New(a *app.App) *Server {
 }
 
 func (s *Server) LoadFromDisk() {
+	log.Println("Loading logs from disk...")
 	scanner := bufio.NewScanner(s.App.File)
 	s.App.Logs = nil
 

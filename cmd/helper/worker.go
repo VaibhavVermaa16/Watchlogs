@@ -2,16 +2,18 @@ package helper
 
 import (
 	"encoding/json"
+	"log"
 	"watchlogs/cmd/internal/app"
 )
 
 func Writer(logCh <-chan app.LogEntry, a *app.App) {
-	// Example worker function that could perform background tasks
+	log.Println("Starting log writer goroutine...")
 	for entry := range logCh {
 		data, _ := json.Marshal(entry)
 		a.Mu.Lock()
 
 		id := len(a.Logs)
+		log.Printf("Writing log entry with ID %d\n", id)
 		a.Logs = append(a.Logs, entry)
 
 		for _, token := range Tokenize(entry.Message) {
