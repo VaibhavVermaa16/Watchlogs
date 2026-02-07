@@ -20,9 +20,15 @@ func TestIngest(t *testing.T) {
 		}
 		defer os.Remove(tempFile.Name())
 		defer tempFile.Close()
+		cfg := helper.LoadConfig()
+		cfg.ChannelSize = 10
+		cfg.DataPath = tempFile.Name()
 		a := &app.App{
+			Cfg:   cfg,
 			File:  tempFile,
 			Index: make(map[string][]int),
+			Logs:  []app.LogEntry{},
+			LogCh: make(chan app.LogEntry, cfg.ChannelSize),
 		}
 
 		srv := New(a)
@@ -37,24 +43,20 @@ func TestIngest(t *testing.T) {
 			t.Fatalf("failed to marshal payload: %v", err)
 		}
 
+		// Start the writer goroutine to process log entries
+		go helper.Writer(a.LogCh, a)
+
 		req := httptest.NewRequest(http.MethodPost, "/ingest", io.NopCloser(bytes.NewReader(body)))
 		res := httptest.NewRecorder()
 
 		srv.Ingest(res, req)
 
-		if res.Code != http.StatusOK {
-			t.Fatalf("expected status 200 OK, got %d", res.Code)
+		if res.Code != http.StatusAccepted {
+			t.Fatalf("expected status 202 Accepted, got %d", res.Code)
 		}
 
-		// rewind file
-		tempFile.Seek(0, 0)
-
-		if len(a.Logs) != 1 {
-			t.Fatalf("expected 1 log entry, got %d", len(a.Logs))
-		}
-
-		if a.Logs[0].Level != "INFO" || a.Logs[0].Message != "This is a test log message" {
-			t.Fatalf("log entry does not match ingested data")
+		if string(res.Body.Bytes()) != "ok" {
+			t.Errorf("expected response body 'ok', got '%s'", res.Body.String())
 		}
 	})
 	t.Run("invalid json payload", func(t *testing.T) {
@@ -83,6 +85,40 @@ func TestIngest(t *testing.T) {
 
 		if response.Code != http.StatusMethodNotAllowed {
 			t.Errorf("expected status 405 Method Not Allowed, got %d", response.Code)
+		}
+	})
+	t.Run("ingest when log channel is full", func(t *testing.T) {
+		cfg := helper.LoadConfig()
+		cfg.ChannelSize = 1 // Set channel size to 1 for testing
+		tempChannel := make(chan app.LogEntry, cfg.ChannelSize)
+		a := &app.App{
+			Cfg:   cfg,
+			Logs:  []app.LogEntry{},
+			Index: make(map[string][]int),
+			LogCh: tempChannel,
+		}
+		srv := New(a)
+
+		// Fill the log channel
+		a.LogCh <- app.LogEntry{Level: "INFO", Message: "First log entry"}
+
+		payload := map[string]string{
+			"level":   "ERROR",
+			"message": "This log should be rejected",
+		}
+
+		body, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatalf("failed to marshal payload: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/ingest", io.NopCloser(bytes.NewReader(body)))
+		res := httptest.NewRecorder()
+
+		srv.Ingest(res, req)
+
+		if res.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected status 503 Service Unavailable, got %d", res.Code)
 		}
 	})
 }

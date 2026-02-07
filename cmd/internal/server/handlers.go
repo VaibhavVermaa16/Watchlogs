@@ -44,8 +44,8 @@ func (s *Server) Ingest(w http.ResponseWriter, r *http.Request) {
 	case s.App.LogCh <- entry:
 		w.WriteHeader(http.StatusAccepted)
 		w.Write([]byte("ok"))
-
 	default:
+		log.Printf("Log channel is full, rejecting request from %s\n", r.RemoteAddr)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte("log channel is full, try again later"))
 	}
