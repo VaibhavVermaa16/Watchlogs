@@ -30,26 +30,24 @@ func main() {
 
 	// Ensure data directory exists
 	os.MkdirAll(cfg.DataPath, 0755)
-	
-	// Open or create the current segment file
-	seg, err := helper.OpenSegment(1, cfg.DataPath)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	// Initialize the app with the current segment and configuration
 	a := &app.App{
-		Index: make(map[string][]int),
+		// Index: make(map[string][]int),
 		LogCh: make(chan app.LogEntry, cfg.ChannelSize),
 		Cfg:   cfg,
-		CurrentSegment: seg,
 	}
+
+	// Set server start time for metrics
 	a.Metrics.StartTime = time.Now()
-	a.Segments = append(a.Segments, seg)
-	atomic.StoreInt64(&a.Metrics.Ready, 1)
 
 	srv := server.New(a)
+
+	// Load existing logs from disk into memory
 	srv.LoadFromDisk()
+
+	// Start the log writer goroutine and mark the server as ready
+	atomic.StoreInt64(&a.Metrics.Ready, 1)
 	go helper.Writer(a.LogCh, a)
 
 	// Graceful shutdown
@@ -60,8 +58,8 @@ func main() {
 		<-stop // Wait for shutdown signal, program pause here until signal is received
 		log.Println("shutting down server...")
 		atomic.StoreInt64(&a.Metrics.Ready, 0)
-		close(a.LogCh) // Close the log channel to stop the writer goroutine
-		a.CurrentSegment.File.Sync()    // Ensure all data is flushed to disk
+		close(a.LogCh)               // Close the log channel to stop the writer goroutine
+		a.CurrentSegment.File.Sync() // Ensure all data is flushed to disk
 		a.CurrentSegment.File.Close()
 		os.Exit(0)
 	}()

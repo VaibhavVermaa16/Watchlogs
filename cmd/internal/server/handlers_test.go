@@ -27,9 +27,10 @@ func TestIngest(t *testing.T) {
 		cfg.DataPath = tempFile.Name()
 		a := &app.App{
 			Cfg:   cfg,
-			Index: make(map[string][]int),
-			Logs:  []app.LogEntry{},
 			LogCh: make(chan app.LogEntry, cfg.ChannelSize),
+			CurrentSegment: &app.Segment{
+				Index: make(map[string][]int),
+			},
 		}
 
 		srv := New(a)
@@ -60,7 +61,9 @@ func TestIngest(t *testing.T) {
 	})
 	t.Run("invalid json payload", func(t *testing.T) {
 		a := &app.App{
-			Index: make(map[string][]int),
+			CurrentSegment: &app.Segment{
+				Index: make(map[string][]int),
+			},
 		}
 		srv := New(a)
 		atomic.StoreInt64(&srv.App.Metrics.Ready, 1)
@@ -75,7 +78,9 @@ func TestIngest(t *testing.T) {
 	})
 	t.Run("ingest with non-POST request", func(t *testing.T) {
 		a := &app.App{
-			Index: make(map[string][]int),
+			CurrentSegment: &app.Segment{
+				Index: make(map[string][]int),
+			},
 		}
 		srv := New(a)
 		atomic.StoreInt64(&srv.App.Metrics.Ready, 1)
@@ -94,9 +99,10 @@ func TestIngest(t *testing.T) {
 		tempChannel := make(chan app.LogEntry, cfg.ChannelSize)
 		a := &app.App{
 			Cfg:   cfg,
-			Logs:  []app.LogEntry{},
-			Index: make(map[string][]int),
 			LogCh: tempChannel,
+			CurrentSegment: &app.Segment{
+				Index: make(map[string][]int),
+			},
 		}
 		srv := New(a)
 		atomic.StoreInt64(&srv.App.Metrics.Ready, 1)
@@ -127,21 +133,30 @@ func TestIngest(t *testing.T) {
 
 func TestSearch(t *testing.T) {
 	a := &app.App{
-		Index: make(map[string][]int),
+		CurrentSegment: &app.Segment{
+			Index: make(map[string][]int),
+		},
 	}
 	srv := New(a)
+
+	cfg := &app.Config{
+		MaxResults: 2,
+	}
+	srv.App.Cfg = *cfg
 
 	atomic.StoreInt64(&srv.App.Metrics.Ready, 1) // Set server as ready
 
 	// Preload some logs
-	a.Logs = []app.LogEntry{
+	a.CurrentSegment.Logs = []app.LogEntry{
 		{Level: "INFO", Message: "first test log"},
 		{Level: "ERROR", Message: "second test log"},
 		{Level: "INFO", Message: "third log entry"},
 	}
-	for i, log := range a.Logs {
+
+	a.Segments = append(a.Segments, a.CurrentSegment)
+	for i, log := range a.CurrentSegment.Logs {
 		for _, token := range helper.Tokenize(log.Message) {
-			a.Index[token] = append(a.Index[token], i)
+			a.CurrentSegment.Index[token] = append(a.CurrentSegment.Index[token], i)
 		}
 	}
 

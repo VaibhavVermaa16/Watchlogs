@@ -50,6 +50,13 @@ func LoadConfig() app.Config {
 		}
 	}
 
+	hotSegments := 2
+	if v := os.Getenv("HOT_SEGMENTS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			hotSegments = n
+		}
+	}
+
 	return app.Config{
 		Retention:   ret,
 		MaxResults:  maxRes,
@@ -57,6 +64,7 @@ func LoadConfig() app.Config {
 		MaxPerToken: maxPerToken,
 		MaxSegSize:  maxSegSize,
 		DataPath:    path,
+		HotSegments: hotSegments,
 	}
 }
 
@@ -118,32 +126,59 @@ func ParseSince(since string) time.Time {
 }
 
 func Cleanup(a *app.App) {
-	ticker := time.NewTicker(10 * time.Minute)
-	
+	ticker := time.NewTicker(1 * time.Hour)
+
 	for range ticker.C {
 		log.Println("Starting cleanup goroutine...")
 		cutoff := time.Now().Add(-a.Cfg.Retention)
 
-		// Perform cleanup logic here, e.g., remove old log entries from memory and disk
-
-		var newLogs []app.LogEntry
-		newIndex := make(map[string][]int)
-
 		a.Mu.Lock()
-		for _, log := range a.Logs {
-			if log.Timestamp.After(cutoff) {
-				id := len(newLogs)
-				newLogs = append(newLogs, log)
-
-				for _, token := range Tokenize(log.Message) {
-					newIndex[token] = append(newIndex[token], id)
+		var keptSegments []*app.Segment
+		for _, segment := range a.Segments {
+			shouldDelete := false
+			if len(segment.Logs) > 0 {
+				shouldDelete = segment.Logs[len(segment.Logs)-1].Timestamp.Before(cutoff)
+			} else if segment.File != nil {
+				if info, err := segment.File.Stat(); err == nil {
+					shouldDelete = info.ModTime().Before(cutoff)
 				}
+			}
+
+			if shouldDelete {
+				if segment.File != nil {
+					segment.File.Sync()
+					segment.File.Close()
+					_ = os.Remove(segment.File.Name())
+				}
+
+				if a.CurrentSegment == segment {
+					nextID := segment.Id + 1
+					newSeg, err := OpenSegment(nextID, a.Cfg.DataPath)
+					if err != nil {
+						log.Printf("Failed to open new segment after cleanup: %v\n", err)
+					} else {
+						a.CurrentSegment = newSeg
+						keptSegments = append(keptSegments, newSeg)
+					}
+				}
+				continue
+			}
+			keptSegments = append(keptSegments, segment)
+		}
+
+		if len(keptSegments) == 0 {
+			newSeg, err := OpenSegment(1, a.Cfg.DataPath)
+			if err != nil {
+				log.Printf("Failed to open fallback segment after cleanup: %v\n", err)
+			} else {
+				a.CurrentSegment = newSeg
+				keptSegments = append(keptSegments, newSeg)
 			}
 		}
 
-		a.Index = newIndex
-		a.Logs = newLogs
+		a.Segments = keptSegments
 		a.Mu.Unlock()
+		log.Println("Cleanup completed.")
 	}
 	log.Println("Cleanup goroutine stopped.")
 }
@@ -157,8 +192,9 @@ func OpenSegment(id int, path string) (*app.Segment, error) {
 
 	info, _ := f.Stat()
 	return &app.Segment{
-		Id:   id,
-		File: f,
-		Size: info.Size(),
+		Id:    id,
+		File:  f,
+		Size:  info.Size(),
+		Index: make(map[string][]int),
 	}, nil
 }

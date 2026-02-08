@@ -5,6 +5,7 @@ import (
 	"os"
 	"slices"
 	"testing"
+	"time"
 	"watchlogs/cmd/helper"
 	"watchlogs/cmd/internal/app"
 )
@@ -17,8 +18,10 @@ func TestServer(t *testing.T) {
 	defer os.Remove(tempfile.Name())
 	defer tempfile.Close()
 	a := &app.App{
-		Cfg:   helper.LoadConfig(),
-		Index: make(map[string][]int),
+		Cfg: helper.LoadConfig(),
+		CurrentSegment: &app.Segment{
+			Index: make(map[string][]int),
+		},
 	}
 	srv := New(a)
 
@@ -26,10 +29,11 @@ func TestServer(t *testing.T) {
 		t.Fatalf("expected server app to be set correctly")
 	}
 
+	now := time.Now()
 	payload := []app.LogEntry{
-		{Level: "INFO", Message: "First log entry"},
-		{Level: "ERROR", Message: "Second log entry"},
-		{Level: "DEBUG", Message: "Third log entry"},
+		{Timestamp: now, Level: "INFO", Message: "First log entry"},
+		{Timestamp: now, Level: "ERROR", Message: "Second log entry"},
+		{Timestamp: now, Level: "DEBUG", Message: "Third log entry"},
 	}
 
 	for _, logEntry := range payload {
@@ -49,14 +53,14 @@ func TestServer(t *testing.T) {
 	srv.LoadFromDisk()
 
 	// Check if logs are loaded correctly
-	if len(srv.App.Logs) != len(payload) {
-		t.Fatalf("expected %d log entries, got %d", len(payload), len(srv.App.Logs))
+	if len(srv.App.CurrentSegment.Logs) != len(payload) {
+		t.Fatalf("expected %d log entries, got %d", len(payload), len(srv.App.CurrentSegment.Logs))
 	}
 
 	for i, logEntry := range payload {
-		if srv.App.Logs[i].Level != logEntry.Level || srv.App.Logs[i].Message != logEntry.Message {
+		if srv.App.CurrentSegment.Logs[i].Level != logEntry.Level || srv.App.CurrentSegment.Logs[i].Message != logEntry.Message {
 			t.Errorf("log entry mismatch at index %d: expected level=%s, message=%s; got level=%s, message=%s",
-				i, logEntry.Level, logEntry.Message, srv.App.Logs[i].Level, srv.App.Logs[i].Message)
+				i, logEntry.Level, logEntry.Message, srv.App.CurrentSegment.Logs[i].Level, srv.App.CurrentSegment.Logs[i].Message)
 		}
 	}
 
@@ -64,7 +68,7 @@ func TestServer(t *testing.T) {
 	for i, logEntry := range payload {
 		tokens := helper.Tokenize(logEntry.Message)
 		for _, token := range tokens {
-			ids, exists := srv.App.Index[token]
+			ids, exists := srv.App.CurrentSegment.Index[token]
 			if !exists {
 				t.Errorf("expected token %s to exist in index", token)
 				continue

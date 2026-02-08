@@ -8,20 +8,23 @@ import (
 
 func Writer(logCh <-chan app.LogEntry, a *app.App) {
 	log.Println("Starting log writer goroutine...")
+
 	for entry := range logCh {
+		// Serialize log entry to JSON
 		data, _ := json.Marshal(entry)
 		a.Mu.Lock()
 
-		id := len(a.Logs)
+		id := len(a.CurrentSegment.Logs)
 		log.Printf("Writing log entry with ID %d\n", id)
-		a.Logs = append(a.Logs, entry)
+		a.CurrentSegment.Logs = append(a.CurrentSegment.Logs, entry)
 
 		for _, token := range Tokenize(entry.Message) {
-			ids := a.Index[token]
+			ids := a.CurrentSegment.Index[token]
 			if len(ids) >= a.Cfg.MaxPerToken {
 				ids = ids[1:] // Remove oldest ID to maintain size
 			}
-			a.Index[token] = append(ids, id)
+			ids = append(ids, id)
+			a.CurrentSegment.Index[token] = ids
 		}
 
 		n, _ := a.CurrentSegment.File.Write(append(data, '\n'))

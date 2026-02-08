@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"os"
 	"testing"
 	"time"
 	"watchlogs/cmd/internal/app"
@@ -8,11 +9,21 @@ import (
 
 func TestWriter(t *testing.T) {
 	cfg := LoadConfig()
+	tempFile, err := os.CreateTemp("", "seg-*.log")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
+
 	a := &app.App{
 		Cfg:   cfg,
-		Logs:  []app.LogEntry{},
-		Index: make(map[string][]int),
 		LogCh: make(chan app.LogEntry, cfg.ChannelSize),
+		CurrentSegment: &app.Segment{
+			Id:    1,
+			File:  tempFile,
+			Index: make(map[string][]int),
+		},
 	}
 
 	go Writer(a.LogCh, a)
@@ -25,11 +36,11 @@ func TestWriter(t *testing.T) {
 	a.LogCh <- entry
 	time.Sleep(200 * time.Millisecond) // Wait for the writer to process
 
-	if len(a.Logs) != 1 {
-		t.Fatalf("Expected 1 log entry, got %d", len(a.Logs))
+	if len(a.CurrentSegment.Logs) != 1 {
+		t.Fatalf("Expected 1 log entry, got %d", len(a.CurrentSegment.Logs))
 	}
 
-	if a.Logs[0].Message != "test log entry" {
-		t.Errorf("Expected message 'test log entry', got '%s'", a.Logs[0].Message)
+	if a.CurrentSegment.Logs[0].Message != "test log entry" {
+		t.Errorf("Expected message 'test log entry', got '%s'", a.CurrentSegment.Logs[0].Message)
 	}
 }

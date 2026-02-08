@@ -13,12 +13,15 @@ import (
 )
 
 func (s *Server) Ingest(w http.ResponseWriter, r *http.Request) {
+	// Check if server is ready before processing the request
 	if atomic.LoadInt64(&s.App.Metrics.Ready) == 0 {
 		log.Printf("Received ingest request from %s but server is not ready\n", r.RemoteAddr)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte("server is not ready, try again later"))
 		return
 	}
+
+	// Only allow POST requests for ingesting logs
 	if r.Method != http.MethodPost {
 		log.Printf("Received non-POST request on /ingest: %s\n", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -27,6 +30,7 @@ func (s *Server) Ingest(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Received ingest request from %s\n", r.RemoteAddr)
 
+	// Increment total ingested logs metric
 	atomic.AddInt64(&s.App.Metrics.TotalIngested, 1)
 
 	var req struct {
@@ -77,44 +81,38 @@ func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
 
 	tokens := helper.Tokenize(q)
 	if len(tokens) == 0 {
-		log.Printf("No tokens found in query: %s returning all logs\n", q)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(s.App.Logs)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("query cannot be empty"))
 		return
 	}
 
 	s.App.Mu.Lock()
 	defer s.App.Mu.Unlock()
-	log.Printf("Locked app state for search query: %s\n", q)
+
 	var results []app.LogEntry
-	// if q != "" {
-	// 	maxResults := 5
-	// 	ids := s.App.Index[q]
-	// 	for i := len(ids) - 1; i >= 0 && len(results) < maxResults; i-- {
-	// 		results = append(results, s.App.Logs[ids[i]])
-	// 	}
-	// } else {
-	// 	results = s.App.Logs
-	// }
-
 	var ids []int
-
-	for i := range tokens {
-		if len(ids) == 0 {
-			ids = s.App.Index[tokens[i]]
-		} else {
-			ids = helper.Intersect(ids, s.App.Index[tokens[i]])
-		}
-	}
-
 	sinceTime := helper.ParseSince(r.URL.Query().Get("since"))
 
-	for i := len(ids) - 1; i >= 0; i-- {
-		e := s.App.Logs[ids[i]]
-		if !sinceTime.IsZero() && e.Timestamp.Before(sinceTime) {
-			continue
+	for seg := len(s.App.Segments) - 1; seg >= 0 && len(ids) < s.App.Cfg.MaxResults; seg-- {
+		segment := s.App.Segments[seg]
+		for i := range tokens {
+			if len(ids) == 0 {
+				ids = segment.Index[tokens[i]]
+			} else {
+				ids = helper.Intersect(ids, segment.Index[tokens[i]])
+			}
 		}
-		results = append(results, e)
+
+		for i := len(ids) - 1; i >= 0 && len(results) < s.App.Cfg.MaxResults; i-- {
+			e := segment.Logs[ids[i]]
+			if !sinceTime.IsZero() && e.Timestamp.Before(sinceTime) {
+				continue
+			}
+			results = append(results, e)
+		}
+
+		// reset ids for next segment
+		ids = nil
 	}
 
 	// Return results as JSON
@@ -131,9 +129,12 @@ func (s *Server) Metrics(w http.ResponseWriter, r *http.Request) {
 
 	uptime := time.Since(s.App.Metrics.StartTime).Seconds()
 	s.App.Mu.Lock()
-	var logCount = len(s.App.Logs)
+	var logCount = 0
+	for _, seg := range s.App.Segments {
+		logCount += len(seg.Logs)
+	}
 	var tokenCount = 0
-	for _, ids := range s.App.Index {
+	for _, ids := range s.App.CurrentSegment.Index {
 		tokenCount += len(ids)
 	}
 	s.App.Mu.Unlock()
