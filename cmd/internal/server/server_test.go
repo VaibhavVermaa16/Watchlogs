@@ -17,7 +17,7 @@ func TestServer(t *testing.T) {
 	defer os.Remove(tempfile.Name())
 	defer tempfile.Close()
 	a := &app.App{
-		File:  tempfile,
+		Cfg:   helper.LoadConfig(),
 		Index: make(map[string][]int),
 	}
 	srv := New(a)
@@ -44,7 +44,7 @@ func TestServer(t *testing.T) {
 		t.Fatalf("failed to open temp file: %v", err)
 	}
 	defer file.Close()
-	srv.App.File = file
+	srv.App.CurrentSegment.File = file
 
 	srv.LoadFromDisk()
 

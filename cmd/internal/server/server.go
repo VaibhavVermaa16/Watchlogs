@@ -20,7 +20,7 @@ func New(a *app.App) *Server {
 
 func (s *Server) LoadFromDisk() {
 	log.Println("Loading logs from disk...")
-	scanner := bufio.NewScanner(s.App.File)
+	scanner := bufio.NewScanner(s.App.CurrentSegment.File)
 	s.App.Logs = nil
 
 	for scanner.Scan() {

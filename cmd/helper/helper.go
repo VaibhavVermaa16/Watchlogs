@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -30,7 +31,7 @@ func LoadConfig() app.Config {
 		}
 	}
 
-	path := "cmd/data/logs.txt"
+	path := "cmd/data/"
 	if v := os.Getenv("DATA_PATH"); v != "" {
 		path = v
 	}
@@ -42,11 +43,19 @@ func LoadConfig() app.Config {
 		}
 	}
 
+	maxSegSize := int64(10 * 1024 * 1024) // Default 10 MB
+	if v := os.Getenv("MAX_SEG_SIZE"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			maxSegSize = n
+		}
+	}
+
 	return app.Config{
 		Retention:   ret,
 		MaxResults:  maxRes,
 		ChannelSize: chSize,
 		MaxPerToken: maxPerToken,
+		MaxSegSize:  maxSegSize,
 		DataPath:    path,
 	}
 }
@@ -137,4 +146,19 @@ func Cleanup(a *app.App) {
 		a.Mu.Unlock()
 	}
 	log.Println("Cleanup goroutine stopped.")
+}
+
+func OpenSegment(id int, path string) (*app.Segment, error) {
+	name := fmt.Sprintf("%s/seg-%06d.log", path, id)
+	f, err := os.OpenFile(name, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0644)
+	if err != nil {
+		return nil, err
+	}
+
+	info, _ := f.Stat()
+	return &app.Segment{
+		Id:   id,
+		File: f,
+		Size: info.Size(),
+	}, nil
 }

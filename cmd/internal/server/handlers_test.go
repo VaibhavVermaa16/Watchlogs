@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
 	"watchlogs/cmd/helper"
 	"watchlogs/cmd/internal/app"
@@ -14,6 +15,7 @@ import (
 
 func TestIngest(t *testing.T) {
 	t.Run("ingest valid payload", func(t *testing.T) {
+
 		tempFile, err := os.CreateTemp("", "test_logs_*.txt")
 		if err != nil {
 			t.Fatalf("failed to create temp file: %v", err)
@@ -25,13 +27,13 @@ func TestIngest(t *testing.T) {
 		cfg.DataPath = tempFile.Name()
 		a := &app.App{
 			Cfg:   cfg,
-			File:  tempFile,
 			Index: make(map[string][]int),
 			Logs:  []app.LogEntry{},
 			LogCh: make(chan app.LogEntry, cfg.ChannelSize),
 		}
 
 		srv := New(a)
+		atomic.StoreInt64(&srv.App.Metrics.Ready, 1) // Set server as ready
 
 		payload := map[string]string{
 			"level":   "INFO",
@@ -42,9 +44,6 @@ func TestIngest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to marshal payload: %v", err)
 		}
-
-		// Start the writer goroutine to process log entries
-		go helper.Writer(a.LogCh, a)
 
 		req := httptest.NewRequest(http.MethodPost, "/ingest", io.NopCloser(bytes.NewReader(body)))
 		res := httptest.NewRecorder()
@@ -64,6 +63,7 @@ func TestIngest(t *testing.T) {
 			Index: make(map[string][]int),
 		}
 		srv := New(a)
+		atomic.StoreInt64(&srv.App.Metrics.Ready, 1)
 
 		req := httptest.NewRequest(http.MethodPost, "/ingest", nil)
 		res := httptest.NewRecorder()
@@ -78,6 +78,7 @@ func TestIngest(t *testing.T) {
 			Index: make(map[string][]int),
 		}
 		srv := New(a)
+		atomic.StoreInt64(&srv.App.Metrics.Ready, 1)
 		request := httptest.NewRequest(http.MethodGet, "/ingest", nil)
 		response := httptest.NewRecorder()
 
@@ -98,6 +99,7 @@ func TestIngest(t *testing.T) {
 			LogCh: tempChannel,
 		}
 		srv := New(a)
+		atomic.StoreInt64(&srv.App.Metrics.Ready, 1)
 
 		// Fill the log channel
 		a.LogCh <- app.LogEntry{Level: "INFO", Message: "First log entry"}
@@ -128,6 +130,8 @@ func TestSearch(t *testing.T) {
 		Index: make(map[string][]int),
 	}
 	srv := New(a)
+
+	atomic.StoreInt64(&srv.App.Metrics.Ready, 1) // Set server as ready
 
 	// Preload some logs
 	a.Logs = []app.LogEntry{

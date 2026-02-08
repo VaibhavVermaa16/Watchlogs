@@ -13,13 +13,14 @@ type LogEntry struct {
 }
 
 type App struct {
-	File    *os.File
-	Logs    []LogEntry
-	Index   map[string][]int
-	Mu      sync.Mutex
-	LogCh   chan LogEntry
-	Metrics Metrics
-	Cfg     Config
+	Logs           []LogEntry
+	Index          map[string][]int
+	Mu             sync.Mutex
+	LogCh          chan LogEntry
+	Metrics        Metrics
+	Cfg            Config
+	CurrentSegment *Segment
+	Segments       []*Segment
 }
 
 type Metrics struct {
@@ -35,4 +36,11 @@ type Config struct {
 	ChannelSize int
 	DataPath    string
 	MaxPerToken int
+	MaxSegSize  int64
+}
+
+type Segment struct {
+	Id   int
+	File *os.File
+	Size int64
 }

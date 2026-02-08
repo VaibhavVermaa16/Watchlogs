@@ -18,24 +18,34 @@ import (
 
 func main() {
 	log.Println("Server started...")
+
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
+
+	// Load configuration and initialize app
 	cfg := helper.LoadConfig()
 	log.Printf("Config: %+v\n", cfg)
-	file, err := os.OpenFile(cfg.DataPath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+
+	// Ensure data directory exists
+	os.MkdirAll(cfg.DataPath, 0755)
+	
+	// Open or create the current segment file
+	seg, err := helper.OpenSegment(1, cfg.DataPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Initialize the app with the current segment and configuration
 	a := &app.App{
-		File:  file,
 		Index: make(map[string][]int),
 		LogCh: make(chan app.LogEntry, cfg.ChannelSize),
 		Cfg:   cfg,
+		CurrentSegment: seg,
 	}
 	a.Metrics.StartTime = time.Now()
+	a.Segments = append(a.Segments, seg)
 	atomic.StoreInt64(&a.Metrics.Ready, 1)
 
 	srv := server.New(a)
@@ -51,8 +61,8 @@ func main() {
 		log.Println("shutting down server...")
 		atomic.StoreInt64(&a.Metrics.Ready, 0)
 		close(a.LogCh) // Close the log channel to stop the writer goroutine
-		file.Sync()    // Ensure all data is flushed to disk
-		file.Close()
+		a.CurrentSegment.File.Sync()    // Ensure all data is flushed to disk
+		a.CurrentSegment.File.Close()
 		os.Exit(0)
 	}()
 
